@@ -11,7 +11,7 @@ const SUSPICIOUS_KEYWORDS = [
 ];
 
 // Check if log contains suspicious activity
-export const checkSuspiciousActivity = async (log) => {
+export const checkSuspiciousActivity = async (log, userEmail = null) => {
   try {
     if (!log) {
       console.log("⚠️ checkSuspiciousActivity called with no log");
@@ -77,10 +77,9 @@ export const checkSuspiciousActivity = async (log) => {
       console.log("✅ Alert created with ID:", alert._id.toString());
 
       // 🔥 IMPORTANT CHANGE:
-      // Pehle sirf critical/high pe email ja raha tha.
-      // Ab HAR severity pe email send karenge.
-      console.log("📧 Triggering alert email for severity:", severity);
-      await sendAlertEmail(alert, log);
+      // Now prefer emailing the logged-in user (userEmail) and fall back to admin/email user
+      console.log("📧 Triggering alert email for severity:", severity, "target:", userEmail || process.env.ADMIN_EMAIL || process.env.EMAIL_USER);
+      await sendAlertEmail(alert, log, userEmail);
 
       return alert;
     }
@@ -94,7 +93,7 @@ export const checkSuspiciousActivity = async (log) => {
 };
 
 // Send alert email
-const sendAlertEmail = async (alert, log) => {
+const sendAlertEmail = async (alert, log, userEmail = null) => {
   try {
     if (!transporter) {
       console.error("❌ Transporter is not initialized");
@@ -102,16 +101,17 @@ const sendAlertEmail = async (alert, log) => {
     }
 
     const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+    const toEmail = userEmail || adminEmail;
 
-    if (!adminEmail) {
-      console.error("❌ ADMIN_EMAIL / EMAIL_USER not configured in .env");
+    if (!toEmail) {
+      console.error("❌ No recipient configured (userEmail or ADMIN_EMAIL / EMAIL_USER missing)");
       return;
     }
 
     const subject = `🚨 ${alert.severity.toUpperCase()} Security Alert - SEO Intrusion Detector`;
 
     console.log("📧 Preparing to send alert email:");
-    console.log("   To      :", adminEmail);
+    console.log("   To      :", toEmail);
     console.log("   From    :", process.env.EMAIL_USER);
     console.log("   Subject :", subject);
 
@@ -179,13 +179,13 @@ Please review this activity immediately in your dashboard.
 
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
-      to: adminEmail,
+      to: toEmail,
       subject,
       html,
       text
     });
 
-    console.log(`✅ Alert email sent successfully for ${alert.severity} severity alert`);
+    console.log(`✅ Alert email sent successfully to ${toEmail} for ${alert.severity} severity alert`);
   } catch (error) {
     console.error("❌ Send alert email error:", error);
   }
