@@ -1,0 +1,7 @@
+[33mcccd45f[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Clean changes without env secrets
+[33mbcaef56[m Change mailer.js file
+[33m4837bb6[m Add .env to .gitignore
+[33m0a06e38[m Add .env too .gitignore
+[33mf947e98[m Safe commit without secrets
+[33m0418339[m Initial commit with all project files
+[33mdf4c478[m first commit
