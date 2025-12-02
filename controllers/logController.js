@@ -40,7 +40,11 @@ export const createLog = async (req, res) => {
       console.log(
         "⚠️ Level triggers alert check, calling checkSuspiciousActivity..."
       );
-      const alert = await checkSuspiciousActivity(log);
+
+      // ✔ Prefer logged-in user's email if available
+      const userEmail = req.user?.email || null;
+      const alert = await checkSuspiciousActivity(log, userEmail);
+
       console.log("📢 Alert result:", alert ? "Created" : "Not created");
     }
 
@@ -290,35 +294,71 @@ export const deleteLog = async (req, res) => {
   }
 };
 
-// ✅ Get alerts
+/* ===================== ALERTS (REAL-TIME MODULE) ====================== */
+
+// ✅ Get alerts (with severity + date/time filters)
 export const getAlerts = async (req, res) => {
   try {
-    console.log("📢 Fetching alerts...");
+    const {
+      severity,
+      acknowledged,
+      startDate,
+      endDate,
+      startTime,
+      endTime,
+    } = req.query;
 
-    const { acknowledged, severity } = req.query;
+    let filter = {};
 
-    const filter = {};
-    if (acknowledged !== undefined) {
-      filter.acknowledged = acknowledged === "true";
-    }
-    if (severity) {
+    // SEVERITY FILTER
+    if (severity && severity !== "all") {
       filter.severity = severity;
     }
 
-    console.log("🔍 Alert filter:", filter);
+    // ACKNOWLEDGED FILTER
+    if (acknowledged !== undefined) {
+      filter.acknowledged = acknowledged === "true";
+    }
 
-    const alerts = await Alert.find(filter)
-      .sort({ createdAt: -1 })
-      .populate("logId")
-      .populate("acknowledgedBy", "name email")
-      .limit(100);
+    // DATE RANGE FILTER
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(`${startDate}T00:00:00`);
+      if (endDate) filter.createdAt.$lte = new Date(`${endDate}T23:59:59`);
+    }
 
-    console.log("✅ Found alerts:", alerts.length);
+    // INITIAL FETCH (WITHOUT TIME FILTER)
+    let alerts = await Alert.find(filter).sort({ createdAt: -1 }).lean();
 
-    res.json(alerts);
+    // TIME RANGE FILTER (AFTER FETCH)
+    if (startTime || endTime) {
+      alerts = alerts.filter((a) => {
+        const created = new Date(a.createdAt);
+        const minutes = created.getHours() * 60 + created.getMinutes();
+
+        let pass = true;
+
+        if (startTime) {
+          const [h, m] = startTime.split(":").map(Number);
+          const from = h * 60 + m;
+          if (minutes < from) pass = false;
+        }
+
+        if (endTime) {
+          const [h, m] = endTime.split(":").map(Number);
+          const to = h * 60 + m;
+          if (minutes > to) pass = false;
+        }
+
+        return pass;
+      });
+    }
+
+    // ALWAYS RETURN ARRAY WRAPPED IN OBJECT
+    return res.json({ alerts });
   } catch (error) {
-    console.error("❌ Get alerts error:", error);
-    res.status(500).json({ message: "Failed to fetch alerts" });
+    console.error("Get Alerts Error:", error);
+    res.status(500).json({ message: "Failed to load alerts" });
   }
 };
 
@@ -369,7 +409,7 @@ export const resolveAlert = async (req, res) => {
   }
 };
 
-// ✅ Delete alert
+// ✅ Delete one alert
 export const deleteAlert = async (req, res) => {
   try {
     const alert = await Alert.findById(req.params.id);
@@ -389,6 +429,35 @@ export const deleteAlert = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete alert",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ Bulk delete alerts
+export const bulkDeleteAlerts = async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No alert IDs provided",
+      });
+    }
+
+    const result = await Alert.deleteMany({ _id: { $in: ids } });
+
+    res.json({
+      success: true,
+      message: `${result.deletedCount} alerts deleted successfully`,
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    console.error("❌ Bulk delete alerts error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete alerts",
       error: error.message,
     });
   }

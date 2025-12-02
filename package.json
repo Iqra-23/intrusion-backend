@@ -18,6 +18,7 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^6.9.11",
     "pdfkit": "^0.15.2",
+    "socket.io": "^4.8.1",
     "ssl-checker": "^2.0.10",
     "uuid": "^13.0.0",
     "validator": "^13.11.0"

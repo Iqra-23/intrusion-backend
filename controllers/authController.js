@@ -6,6 +6,7 @@ import { transporter } from "../config/mailer.js";
 import OTP from "../models/OTP.js";
 import User from "../models/User.js";
 import Log from "../models/Log.js";
+import { checkSuspiciousActivity } from "../utils/alertUtils.js"; // 🔥 NEW IMPORT
 
 // Helper function to get client info
 const getClientInfo = (req) => ({
@@ -13,7 +14,7 @@ const getClientInfo = (req) => ({
   userAgent: req.headers["user-agent"] || "Unknown",
 });
 
-// Helper function to create logs
+// ✅ Helper function to create logs + trigger alerts for suspicious levels
 const createLog = async (
   level,
   message,
@@ -23,7 +24,7 @@ const createLog = async (
   metadata = {}
 ) => {
   try {
-    await Log.create({
+    const log = await Log.create({
       level,
       message,
       keyword,
@@ -31,6 +32,12 @@ const createLog = async (
       userAgent,
       metadata,
     });
+
+    // 🔥 Yahan se REAL-TIME ALERT trigger hoga (sirf warning / error / suspicious pe)
+    if (["warning", "error", "suspicious"].includes(level)) {
+      const userEmail = metadata?.userEmail || null;
+      await checkSuspiciousActivity(log, userEmail);
+    }
   } catch (error) {
     console.error("Log creation error:", error);
   }
@@ -48,7 +55,8 @@ export const signup = async (req, res) => {
         `Signup attempt with invalid email: ${email}`,
         ["authentication", "signup"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
       return res.status(400).json({ message: "Invalid email format" });
     }
@@ -59,7 +67,8 @@ export const signup = async (req, res) => {
         `Signup attempt with weak password`,
         ["authentication", "signup"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
       return res
         .status(400)
@@ -73,7 +82,8 @@ export const signup = async (req, res) => {
         `Signup attempt for existing email: ${email}`,
         ["authentication", "signup"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
       return res.status(400).json({ message: "Email already registered" });
     }
@@ -94,7 +104,8 @@ export const signup = async (req, res) => {
       `Signup initiated for ${email}`,
       ["authentication", "signup"],
       clientInfo.ipAddress,
-      clientInfo.userAgent
+      clientInfo.userAgent,
+      { userEmail: email }
     );
 
     const mailOptions = {
@@ -134,7 +145,8 @@ export const verifyEmail = async (req, res) => {
         `Email verification with invalid email format`,
         ["authentication"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
       return res.status(400).json({ message: "Invalid email format" });
     }
@@ -145,7 +157,8 @@ export const verifyEmail = async (req, res) => {
         `Email verification failed - invalid OTP`,
         ["authentication"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
       return res.status(400).json({ message: "Invalid verification code" });
     }
@@ -157,7 +170,8 @@ export const verifyEmail = async (req, res) => {
         `Email verification failed - expired OTP for ${email}`,
         ["authentication"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
       return res
         .status(400)
@@ -172,7 +186,8 @@ export const verifyEmail = async (req, res) => {
         `Email verification - user already exists: ${email}`,
         ["authentication"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
       return res.status(400).json({ message: "Email already registered" });
     }
@@ -192,7 +207,8 @@ export const verifyEmail = async (req, res) => {
       `User registered successfully: ${email}`,
       ["authentication", "signup"],
       clientInfo.ipAddress,
-      clientInfo.userAgent
+      clientInfo.userAgent,
+      { userEmail: email }
     );
 
     const token = generateToken(user);
@@ -207,7 +223,7 @@ export const verifyEmail = async (req, res) => {
   }
 };
 
-// ✅ Login with attempt tracking + OTP SEND
+// ✅ Login with attempt tracking + REAL-TIME ALERTS on failure
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -220,7 +236,8 @@ export const login = async (req, res) => {
         `Login failed - user not found: ${email}`,
         ["authentication", "login"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
       return res.status(401).json({
         message: "Invalid email or password. Please try again.",
@@ -238,7 +255,8 @@ export const login = async (req, res) => {
         `Login attempt on locked account: ${email}`,
         ["authentication", "login", "locked"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
 
       return res.status(423).json({
@@ -261,7 +279,8 @@ export const login = async (req, res) => {
         `Failed login attempt for ${email} (${updatedUser.loginAttempts} attempts)`,
         ["authentication", "login", "failed"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
 
       if (attemptsRemaining <= 0) {
@@ -270,7 +289,8 @@ export const login = async (req, res) => {
           `Account locked after failed login attempts: ${email}`,
           ["authentication", "login", "locked", "brute_force"],
           clientInfo.ipAddress,
-          clientInfo.userAgent
+          clientInfo.userAgent,
+          { userEmail: email }
         );
 
         return res.status(401).json({
@@ -304,7 +324,8 @@ export const login = async (req, res) => {
       `Login OTP sent to ${email}`,
       ["authentication", "login", "otp"],
       clientInfo.ipAddress,
-      clientInfo.userAgent
+      clientInfo.userAgent,
+      { userEmail: email }
     );
 
     const mailOptions = {
@@ -325,7 +346,8 @@ export const login = async (req, res) => {
       `User logged in successfully: ${email}`,
       ["authentication", "login", "success"],
       clientInfo.ipAddress,
-      clientInfo.userAgent
+      clientInfo.userAgent,
+      { userEmail: email }
     );
 
     res.json({
@@ -360,7 +382,8 @@ export const verifyLoginOtp = async (req, res) => {
         `Login OTP verification failed for ${email}`,
         ["authentication", "login", "otp"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
@@ -372,7 +395,8 @@ export const verifyLoginOtp = async (req, res) => {
       `Login OTP verified for ${email}`,
       ["authentication", "login", "otp_success"],
       clientInfo.ipAddress,
-      clientInfo.userAgent
+      clientInfo.userAgent,
+      { userEmail: email }
     );
 
     return res.json({ message: "OTP verified successfully" });
@@ -401,7 +425,8 @@ export const forgotPassword = async (req, res) => {
         `Password reset requested for non-existent email: ${email}`,
         ["authentication", "password"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
       return res.status(404).json({ message: "No account found with this email" });
     }
@@ -415,7 +440,8 @@ export const forgotPassword = async (req, res) => {
       `Password reset requested for ${email}`,
       ["authentication", "password"],
       clientInfo.ipAddress,
-      clientInfo.userAgent
+      clientInfo.userAgent,
+      { userEmail: email }
     );
 
     const mailOptions = {
@@ -460,7 +486,8 @@ export const resetPassword = async (req, res) => {
         `Password reset failed - invalid OTP for ${email}`,
         ["authentication", "password"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
@@ -479,7 +506,8 @@ export const resetPassword = async (req, res) => {
       `Password reset successfully for ${email}`,
       ["authentication", "password"],
       clientInfo.ipAddress,
-      clientInfo.userAgent
+      clientInfo.userAgent,
+      { userEmail: email }
     );
 
     res.json({ message: "Password reset successful" });
@@ -510,7 +538,8 @@ export const googleLogin = async (req, res) => {
         `New user registered via Google: ${email}`,
         ["authentication", "google"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
     } else {
       await createLog(
@@ -518,7 +547,8 @@ export const googleLogin = async (req, res) => {
         `User logged in via Google: ${email}`,
         ["authentication", "google"],
         clientInfo.ipAddress,
-        clientInfo.userAgent
+        clientInfo.userAgent,
+        { userEmail: email }
       );
     }
 
@@ -531,7 +561,8 @@ export const googleLogin = async (req, res) => {
       `Google login OTP sent to ${email}`,
       ["authentication", "google", "otp"],
       clientInfo.ipAddress,
-      clientInfo.userAgent
+      clientInfo.userAgent,
+      { userEmail: email }
     );
 
     const mailOptions = {
@@ -584,7 +615,8 @@ export const resendVerification = async (req, res) => {
       `Verification code resent for ${email}`,
       ["authentication"],
       clientInfo.ipAddress,
-      clientInfo.userAgent
+      clientInfo.userAgent,
+      { userEmail: email }
     );
 
     const mailOptions = {
