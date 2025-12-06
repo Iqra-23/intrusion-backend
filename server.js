@@ -62,4 +62,5 @@ io.on("connection", () => {
 // Start server
 server.listen(process.env.PORT, () => {
   console.log(`🚀 Server running with Socket.io at port ${process.env.PORT}`);
+  return "Server started";
 });
