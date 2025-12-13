@@ -27,6 +27,7 @@ router.post("/reset-password", resetPassword);
 // Google
 router.post("/google-login", googleLogin);
 
+
 // Resend
 router.post("/resend-verification", resendVerification);
 
