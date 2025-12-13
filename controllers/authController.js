@@ -197,7 +197,7 @@ export const login = async (req, res) => {
       { userEmail: email }
     );
 
-    sendMail({
+    await  sendMail({
       to: email,
       subject: "Login OTP - SEO Intrusion Detector",
       html: `<h2>Your OTP is ${code}</h2>`,

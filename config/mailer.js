@@ -1,56 +1,21 @@
 // config/mailer.js
-import { google } from "googleapis";
-import dotenv from "dotenv";
+import { Resend } from "resend";
 
-dotenv.config();
-
-const OAuth2 = google.auth.OAuth2;
-
-const oauth2Client = new OAuth2(
-  process.env.CLIENT_ID,
-  process.env.CLIENT_SECRET,
-  "https://developers.google.com/oauthplayground"
-);
-
-oauth2Client.setCredentials({
-  refresh_token: process.env.REFRESH_TOKEN,
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const sendMail = async ({ to, subject, html }) => {
   try {
-    const accessToken = await oauth2Client.getAccessToken();
-
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-
-    const messageParts = [
-      `From: "SEO Intrusion Detector" <${process.env.EMAIL_USER}>`,
-      `To: ${to}`,
-      "Content-Type: text/html; charset=utf-8",
-      "MIME-Version: 1.0",
-      `Subject: ${subject}`,
-      "",
+    const data = await resend.emails.send({
+      from: "SEO Intrusion <onboarding@resend.dev>",
+      to,
+      subject,
       html,
-    ];
-
-    const message = messageParts.join("\n");
-
-    const encodedMessage = Buffer.from(message)
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-
-    await gmail.users.messages.send({
-      userId: "me",
-      requestBody: {
-        raw: encodedMessage,
-      },
     });
 
-    console.log("✅ EMAIL SENT TO:", to);
+    console.log("✅ Email sent:", data);
+    return data;
   } catch (error) {
-    console.error("❌ EMAIL FAILED:", error.message);
+    console.error("❌ Email send failed:", error);
     throw error;
   }
 };
-
