@@ -307,24 +307,45 @@ export const googleLogin = async (req, res) => {
 export const resendVerification = async (req, res) => {
   try {
     const { email } = req.body;
+    const clientInfo = getClientInfo(req);
+
+    if (!validator.isEmail(email)) {
+      return res.status(400).json({ message: "Invalid email format" });
+    }
 
     const existingOTP = await OTP.findOne({ email });
-    if (!existingOTP)
-      return res
-        .status(404)
-        .json({ message: "No pending verification found" });
+    if (!existingOTP) {
+      return res.status(404).json({
+        message: "No pending verification found for this email",
+      });
+    }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    await OTP.updateOne({ email }, { code, createdAt: Date.now() });
 
-    sendMail({
+    await OTP.findOneAndUpdate(
+      { email },
+      { code, createdAt: Date.now() }
+    );
+
+    await createLog(
+      "info",
+      `Verification code resent for ${email}`,
+      ["authentication"],
+      clientInfo.ipAddress,
+      clientInfo.userAgent,
+      { userEmail: email }
+    );
+
+    await sendMail({
       to: email,
-      subject: "New Verification Code",
-      html: `<h2>Your new code is ${code}</h2>`,
-    }).catch(() => {});
+      subject: "New Verification Code - SEO Intrusion Detector",
+      html: `<h2>Your new verification code is: ${code}</h2>`,
+    });
 
-    res.json({ message: "Verification code resent" });
-  } catch {
-    res.status(500).json({ message: "Failed to resend verification" });
+    res.json({ message: "Verification code resent successfully" });
+  } catch (err) {
+    console.error("Resend verification error:", err);
+    res.status(500).json({ message: "Failed to resend verification code" });
   }
 };
+

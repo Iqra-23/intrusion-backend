@@ -1,4 +1,3 @@
-// routes/authRoutes.js
 import express from "express";
 import {
   signup,
@@ -16,10 +15,10 @@ const router = express.Router();
 router.post("/signup", signup);
 router.post("/verify-email", verifyEmail);
 router.post("/login", login);
-router.post("/login/verify-otp", verifyLoginOtp);
-router.post("/forgot", forgotPassword);
-router.post("/reset", resetPassword);
-router.post("/google", googleLogin);
+router.post("/verify-login-otp", verifyLoginOtp);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
+router.post("/google-login", googleLogin);
 router.post("/resend-verification", resendVerification);
 
 export default router;
