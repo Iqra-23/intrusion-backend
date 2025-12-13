@@ -1,24 +1,56 @@
-import nodemailer from "nodemailer";
+// config/mailer.js
+import { google } from "googleapis";
 import dotenv from "dotenv";
+
 dotenv.config();
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, // Gmail App Password
-  },
+const OAuth2 = google.auth.OAuth2;
+
+const oauth2Client = new OAuth2(
+  process.env.CLIENT_ID,
+  process.env.CLIENT_SECRET,
+  "https://developers.google.com/oauthplayground"
+);
+
+oauth2Client.setCredentials({
+  refresh_token: process.env.REFRESH_TOKEN,
 });
 
 export const sendMail = async ({ to, subject, html }) => {
-  if (!to) throw new Error("No recipient email");
+  try {
+    const accessToken = await oauth2Client.getAccessToken();
 
-  await transporter.sendMail({
-    from: `"SEO Intrusion Detector" <${process.env.EMAIL_USER}>`,
-    to,
-    subject,
-    html,
-  });
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-  console.log("📧 Email sent to:", to);
+    const messageParts = [
+      `From: "SEO Intrusion Detector" <${process.env.EMAIL_USER}>`,
+      `To: ${to}`,
+      "Content-Type: text/html; charset=utf-8",
+      "MIME-Version: 1.0",
+      `Subject: ${subject}`,
+      "",
+      html,
+    ];
+
+    const message = messageParts.join("\n");
+
+    const encodedMessage = Buffer.from(message)
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    await gmail.users.messages.send({
+      userId: "me",
+      requestBody: {
+        raw: encodedMessage,
+      },
+    });
+
+    console.log("✅ EMAIL SENT TO:", to);
+  } catch (error) {
+    console.error("❌ EMAIL FAILED:", error.message);
+    throw error;
+  }
 };
+

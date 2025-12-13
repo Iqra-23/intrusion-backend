@@ -348,4 +348,13 @@ export const resendVerification = async (req, res) => {
     res.status(500).json({ message: "Failed to resend verification code" });
   }
 };
-
+export {
+  signup,
+  verifyEmail,
+  login,
+  verifyLoginOtp,
+  forgotPassword,
+  resetPassword,
+  googleLogin,
+  resendVerification,
+};
