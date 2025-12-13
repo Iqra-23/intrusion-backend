@@ -2,7 +2,7 @@
 import bcrypt from "bcrypt";
 import validator from "validator";
 import { generateToken } from "../config/jwt.js";
-import { transporter } from "../config/mailer.js";
+import { sendMail } from "../config/mailer.js";
 import OTP from "../models/OTP.js";
 import User from "../models/User.js";
 import Log from "../models/Log.js";
@@ -120,7 +120,11 @@ export const signup = async (req, res) => {
       text: `Welcome ${name}! Your email verification code is: ${code}\n\nThis code will expire in 5 minutes.`,
     };
 
-    await transporter.sendMail(mailOptions);
+await sendMail({
+  to: email,
+  subject: "Login OTP - SEO Intrusion Detector",
+  html: "<h2>Your OTP...</h2>",
+});
 
     res.json({
       message: "Verification code sent to your email",
@@ -339,7 +343,11 @@ export const login = async (req, res) => {
       </div>`,
     };
 
-    await transporter.sendMail(mailOptions);
+await sendMail({
+  to: email,
+  subject: "Login OTP - SEO Intrusion Detector",
+  html: "<h2>Your OTP...</h2>",
+});;
 
     await createLog(
       "info",
@@ -450,8 +458,11 @@ export const forgotPassword = async (req, res) => {
       subject: "Password Reset OTP - SEO Intrusion Detector",
       html: `<div style="font-family: Arial, sans-serif;"><h2>Password Reset</h2><p>Your OTP is: <strong>${code}</strong></p></div>`,
     };
-
-    await transporter.sendMail(mailOptions);
+await sendMail({
+  to: email,
+  subject: "Login OTP - SEO Intrusion Detector",
+  html: "<h2>Your OTP...</h2>",
+});
     res.json({ message: "OTP sent successfully", email });
   } catch (err) {
     console.error("Forgot password error:", err);
@@ -575,8 +586,11 @@ export const googleLogin = async (req, res) => {
         <p>This code will expire in 5 minutes.</p>
       </div>`,
     };
-
-    await transporter.sendMail(mailOptions);
+await sendMail({
+  to: email,
+  subject: "Login OTP - SEO Intrusion Detector",
+  html: "<h2>Your OTP...</h2>",
+});
 
     const token = generateToken(user);
     res.json({
@@ -625,8 +639,11 @@ export const resendVerification = async (req, res) => {
       subject: "New Verification Code - SEO Intrusion Detector",
       html: `<div style="font-family: Arial, sans-serif;"><h2>New Verification Code</h2><p>Your code is: <strong>${code}</strong></p></div>`,
     };
-
-    await transporter.sendMail(mailOptions);
+await sendMail({
+  to: email,
+  subject: "Login OTP - SEO Intrusion Detector",
+  html: "<h2>Your OTP...</h2>",
+});
     res.json({ message: "New verification code sent to your email" });
   } catch (err) {
     console.error("Resend verification error:", err);

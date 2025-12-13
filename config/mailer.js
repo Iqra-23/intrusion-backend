@@ -25,15 +25,12 @@
 // });
 
 
-import nodemailer from "nodemailer";
 import { google } from "googleapis";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-const OAuth2 = google.auth.OAuth2;
-
-const oauth2Client = new OAuth2(
+const oauth2Client = new google.auth.OAuth2(
   process.env.CLIENT_ID,
   process.env.CLIENT_SECRET,
   "https://developers.google.com/oauthplayground"
@@ -43,26 +40,34 @@ oauth2Client.setCredentials({
   refresh_token: process.env.REFRESH_TOKEN,
 });
 
-export const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    type: "OAuth2",
-    user: process.env.EMAIL_USER,
-    clientId: process.env.CLIENT_ID,
-    clientSecret: process.env.CLIENT_SECRET,
-    refreshToken: process.env.REFRESH_TOKEN,
-    accessToken: async () => {
-      const accessToken = await oauth2Client.getAccessToken();
-      return accessToken?.token;
-    },
-  },
+const gmail = google.gmail({
+  version: "v1",
+  auth: oauth2Client,
 });
 
-// ✅ Verify transporter
-transporter.verify((error) => {
-  if (error) {
-    console.error("❌ Gmail OAuth transporter error:", error);
-  } else {
-    console.log("✅ Gmail OAuth transporter is ready");
-  }
-});
+/**
+ * Send email using Gmail API (Railway-safe)
+ */
+export const sendMail = async ({ to, subject, html }) => {
+  const message = `
+From: SEO Intrusion Detector <${process.env.EMAIL_USER}>
+To: ${to}
+Subject: ${subject}
+Content-Type: text/html; charset="UTF-8"
+
+${html}
+  `;
+
+  const encodedMessage = Buffer.from(message)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw: encodedMessage,
+    },
+  });
+};
