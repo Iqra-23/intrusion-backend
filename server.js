@@ -25,7 +25,17 @@ const app = express();
 connectDB();
 
 // Middlewares
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "https://seo-intrusion-frontend.vercel.app",
+      "http://localhost:5173"
+    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    credentials: true
+  })
+);
+
 app.use(express.json());
 app.use(morgan("dev"));
 
@@ -47,10 +57,15 @@ startLogCleanupCron();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST", "PATCH", "DELETE"]
+    origin: [
+      "https://seo-intrusion-frontend.vercel.app",
+      "http://localhost:5173"
+    ],
+    methods: ["GET", "POST", "PATCH", "DELETE"],
+    credentials: true
   }
 });
+
 
 // Register global socket instance
 initSocket(io);

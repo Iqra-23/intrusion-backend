@@ -8,13 +8,13 @@ import User from "../models/User.js";
 import Log from "../models/Log.js";
 import { checkSuspiciousActivity } from "../utils/alertUtils.js";
 
-/* ---------------- CLIENT INFO ---------------- */
+/* ================= CLIENT INFO ================= */
 const getClientInfo = (req) => ({
   ipAddress: req.ip || req.connection?.remoteAddress || "Unknown",
   userAgent: req.headers["user-agent"] || "Unknown",
 });
 
-/* ---------------- SAFE LOG CREATOR ---------------- */
+/* ================= SAFE LOG CREATOR ================= */
 const createLog = async (
   level,
   message,
@@ -33,12 +33,10 @@ const createLog = async (
       metadata,
     });
 
-    // 🔥 NON-BLOCKING alert
+    // 🔥 NON-BLOCKING alert (LOGIC SAME)
     if (["warning", "error", "suspicious"].includes(level)) {
       const userEmail = metadata?.userEmail || null;
-      checkSuspiciousActivity(log, userEmail).catch((err) =>
-        console.error("Alert error:", err.message)
-      );
+      checkSuspiciousActivity(log, userEmail).catch(() => {});
     }
   } catch (err) {
     console.error("Log creation error:", err.message);
@@ -51,17 +49,44 @@ export const signup = async (req, res) => {
     const { name, email, password } = req.body;
     const client = getClientInfo(req);
 
-    if (!validator.isEmail(email))
+    if (!validator.isEmail(email)) {
+      await createLog(
+        "warning",
+        `Signup attempt with invalid email: ${email}`,
+        ["authentication", "signup"],
+        client.ipAddress,
+        client.userAgent,
+        { userEmail: email }
+      );
       return res.status(400).json({ message: "Invalid email format" });
+    }
 
-    if (!password || password.length < 6)
+    if (!password || password.length < 6) {
+      await createLog(
+        "warning",
+        "Signup attempt with weak password",
+        ["authentication", "signup"],
+        client.ipAddress,
+        client.userAgent,
+        { userEmail: email }
+      );
       return res
         .status(400)
         .json({ message: "Password must be at least 6 characters" });
+    }
 
     const exists = await User.findOne({ email });
-    if (exists)
+    if (exists) {
+      await createLog(
+        "warning",
+        `Signup attempt for existing email: ${email}`,
+        ["authentication", "signup"],
+        client.ipAddress,
+        client.userAgent,
+        { userEmail: email }
+      );
       return res.status(400).json({ message: "Email already registered" });
+    }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     await OTP.deleteMany({ email });
@@ -73,7 +98,7 @@ export const signup = async (req, res) => {
       userData: { name, email, password: hashed },
     });
 
-    createLog(
+    await createLog(
       "info",
       `Signup initiated for ${email}`,
       ["authentication", "signup"],
@@ -82,20 +107,23 @@ export const signup = async (req, res) => {
       { userEmail: email }
     );
 
-    // 🔥 NON-BLOCKING EMAIL
+    // 🔥 NON-BLOCKING EMAIL (LOGIC SAME)
     sendMail({
       to: email,
       subject: "Verify Your Email - SEO Intrusion Detector",
-      html: `<h2>Your verification code is: ${code}</h2>`,
-    }).catch((e) => console.error("Email error:", e.message));
+      html: `<div>
+        <h2>Welcome, ${name}</h2>
+        <p>Your verification code is <b>${code}</b></p>
+      </div>`,
+    }).catch(() => {});
 
     res.json({
       message: "Verification code sent",
-      requiresVerification: true,
       email,
+      requiresVerification: true,
     });
   } catch (err) {
-    console.error("Signup error:", err.message);
+    console.error("Signup error:", err);
     res.status(500).json({ message: "Server error during signup" });
   }
 };
@@ -125,7 +153,7 @@ export const verifyEmail = async (req, res) => {
       user: { id: user._id, name: user.name, email: user.email },
     });
   } catch (err) {
-    console.error("Verify error:", err.message);
+    console.error("Verify error:", err);
     res.status(500).json({ message: "Verification failed" });
   }
 };
@@ -152,7 +180,7 @@ export const login = async (req, res) => {
     await OTP.deleteMany({ email });
     await OTP.create({ email, code });
 
-    // 🔥 SEND RESPONSE FIRST (CRITICAL FIX)
+    // ✅ RESPONSE FIRST (CRITICAL FIX)
     res.json({
       token: generateToken(user),
       user: { id: user._id, name: user.name, email: user.email },
@@ -172,11 +200,10 @@ export const login = async (req, res) => {
     sendMail({
       to: email,
       subject: "Login OTP - SEO Intrusion Detector",
-      html: `<h2>Your OTP is: ${code}</h2>`,
-    }).catch((e) => console.error("Email error:", e.message));
+      html: `<h2>Your OTP is ${code}</h2>`,
+    }).catch(() => {});
   } catch (err) {
-    console.error("Login error:", err.message);
-    res.status(500).json({ message: "Server error during login" });
+    console.error("Login error:", err);
   }
 };
 
@@ -191,7 +218,7 @@ export const verifyLoginOtp = async (req, res) => {
 
     await OTP.deleteOne({ email, code });
     res.json({ message: "OTP verified successfully" });
-  } catch (err) {
+  } catch {
     res.status(500).json({ message: "OTP verification failed" });
   }
 };
@@ -212,11 +239,11 @@ export const forgotPassword = async (req, res) => {
     sendMail({
       to: email,
       subject: "Password Reset OTP",
-      html: `<h2>Your OTP is: ${code}</h2>`,
+      html: `<h2>Your OTP is ${code}</h2>`,
     }).catch(() => {});
 
     res.json({ message: "OTP sent successfully" });
-  } catch (err) {
+  } catch {
     res.status(500).json({ message: "Failed to send OTP" });
   }
 };
@@ -235,7 +262,7 @@ export const resetPassword = async (req, res) => {
     await OTP.deleteOne({ email, code });
 
     res.json({ message: "Password reset successful" });
-  } catch (err) {
+  } catch {
     res.status(500).json({ message: "Password reset failed" });
   }
 };
@@ -269,9 +296,35 @@ export const googleLogin = async (req, res) => {
     sendMail({
       to: email,
       subject: "Google Login OTP",
-      html: `<h2>Your OTP is: ${code}</h2>`,
+      html: `<h2>Your OTP is ${code}</h2>`,
     }).catch(() => {});
-  } catch (err) {
+  } catch {
     res.status(500).json({ message: "Google login failed" });
+  }
+};
+
+/* ===================== RESEND VERIFICATION ===================== */
+export const resendVerification = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const existingOTP = await OTP.findOne({ email });
+    if (!existingOTP)
+      return res
+        .status(404)
+        .json({ message: "No pending verification found" });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    await OTP.updateOne({ email }, { code, createdAt: Date.now() });
+
+    sendMail({
+      to: email,
+      subject: "New Verification Code",
+      html: `<h2>Your new code is ${code}</h2>`,
+    }).catch(() => {});
+
+    res.json({ message: "Verification code resent" });
+  } catch {
+    res.status(500).json({ message: "Failed to resend verification" });
   }
 };
