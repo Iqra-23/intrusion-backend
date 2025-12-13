@@ -28,13 +28,14 @@ connectDB();
 app.use(
   cors({
     origin: [
-      "https://seo-intrusion-frontend.vercel.app",
-      "http://localhost:5173"
+      "http://localhost:5173",
+      "https://seo-intrusion-frontend.vercel.app"
     ],
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    credentials: true
+    methods: ["GET", "POST", "PATCH", "DELETE"],
+    credentials: true,
   })
 );
+
 
 app.use(express.json());
 app.use(morgan("dev"));
