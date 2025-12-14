@@ -12,9 +12,9 @@ export const sendMail = async ({ to, subject, html }) => {
   try {
     await resend.emails.send({
       from: "SEO Intrusion <onboarding@resend.dev>",
-      to: to,
-      subject : subject,
-      html: html,
+      to,
+      subject,
+      html,
     });
 
     console.log(`📧 Email sent to ${to}`);
