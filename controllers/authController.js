@@ -283,21 +283,21 @@ export const googleLogin = async (req, res) => {
       });
     }
 
-    // const code = Math.floor(100000 + Math.random() * 900000).toString();
-    // await OTP.deleteMany({ email });
-    // await OTP.create({ email, code });
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    await OTP.deleteMany({ email });
+    await OTP.create({ email, code });
 
     res.json({
       token: generateToken(user),
       user: { id: user._id, name: user.name, email: user.email },
-      // otpSent: true,
+      otpSent: true,
     });
 
-    // sendMail({
-    //   to: email,
-    //   subject: "Google Login OTP",
-    //   html: `<h2>Your OTP is ${code}</h2>`,
-    // }).catch(() => {});
+    sendMail({
+      to: email,
+      subject: "Google Login OTP",
+      html: `<h2>Your OTP is ${code}</h2>`,
+    }).catch(() => {});
   } catch {
     res.status(500).json({ message: "Google login failed" });
   }
