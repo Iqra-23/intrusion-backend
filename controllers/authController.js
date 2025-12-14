@@ -290,7 +290,7 @@ export const googleLogin = async (req, res) => {
     res.json({
       token: generateToken(user),
       user: { id: user._id, name: user.name, email: user.email },
-      otpSent: true,
+      // otpSent: true,
     });
 
     // sendMail({
