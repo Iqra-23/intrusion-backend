@@ -20,7 +20,7 @@ export const sendMail = async ({ to, subject, html }) => {
     const recipient = to.includes('<') ? to.match(/<([^>]+)>/)[1] : to;
 
     await transporter.sendMail({
-      from: `"SEO Intrusion Detector" <${process.env.EMAIL_USER}>`,
+      from: process.env.EMAIL_USER,
       to: recipient,
       subject,
       html,
