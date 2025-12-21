@@ -1,24 +1,23 @@
-// config/mailer.js
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-export const sendMail = async ({ to, subject, html }) => {
-  if (!process.env.RESEND_API_KEY) {
-    console.error("❌ RESEND_API_KEY missing");
-    return;
+export const sendMail = async ({ to, subject, html, text }) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error("EMAIL_USER or EMAIL_PASS missing");
   }
 
-  try {
-    await resend.emails.send({
-      from: "SEO Intrusion <onboarding@resend.dev>",
-      to,
-      subject,
-      html,
-    });
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
 
-    console.log(`📧 Email sent to ${to}`);
-  } catch (error) {
-    console.error("❌ Email send failed:", error.message);
-  }
+  return transporter.sendMail({
+    from: `"SEO Intrusion Detector" <${process.env.EMAIL_USER}>`,
+    to,
+    subject,
+    html,
+    text,
+  });
 };
