@@ -1,5 +1,11 @@
 import nodemailer from "nodemailer";
 
+// config/mailer.js
+import { Resend } from "resend";
+import dotenv from "dotenv";
+dotenv.config();
+
+
 export const sendMail = async ({ to, subject, html, text }) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     throw new Error("EMAIL_USER or EMAIL_PASS missing");
