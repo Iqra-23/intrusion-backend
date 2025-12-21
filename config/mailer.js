@@ -16,15 +16,18 @@ export const sendMail = async ({ to, subject, html }) => {
       return;
     }
 
+    // Ensure 'to' is a simple email address
+    const recipient = to.includes('<') ? to.match(/<([^>]+)>/)[1] : to;
+
     await transporter.sendMail({
       from: `"SEO Intrusion Detector" <${process.env.EMAIL_USER}>`,
-      to,
+      to: recipient,
       subject,
       html,
     });
 
-    console.log(`📧 Email sent to ${to}`);
+    console.log(`📧 Email sent to ${recipient}`);
   } catch (error) {
-    console.error("❌ Email send failed:", error.message);
+    console.error(`❌ Email send failed to ${to}:`, error);
   }
 };
