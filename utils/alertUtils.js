@@ -1,7 +1,8 @@
 // utils/alertUtils.js
 import Alert from "../models/Alert.js";
-import { transporter } from "../config/mailer.js";
+
 import { getIO } from "./socket.js";
+import { sendMail } from "../config/mailer.js";
 
 // Suspicious keywords that trigger alerts
 const SUSPICIOUS_KEYWORDS = [
@@ -164,12 +165,7 @@ export const checkSuspiciousActivity = async (log, userEmail = null) => {
 // =========================================================
 const sendAlertEmail = async (alert, log, userEmail = null) => {
   try {
-    if (!transporter) {
-      console.error("❌ Transporter not initialized");
-      return;
-    }
-
-    const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+    const adminEmail = process.env.ADMIN_EMAIL;
     const toEmail = userEmail || adminEmail;
 
     if (!toEmail) {
@@ -192,26 +188,24 @@ const sendAlertEmail = async (alert, log, userEmail = null) => {
             ? `<p><strong>Keywords:</strong> ${alert.keywords.join(", ")}</p>`
             : ""
         }
-        <a href="${
-          process.env.FRONTEND_URL || "http://localhost:5173"
-        }/alerts">
+        <a href="${process.env.FRONTEND_URL}/alerts">
           View Alert
         </a>
       </div>
     `;
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    await sendMail({
       to: toEmail,
       subject,
       html,
     });
 
-    console.log(`📧 Email sent to ${toEmail}`);
+    console.log(`📧 Alert email sent to ${toEmail}`);
   } catch (error) {
     console.error("❌ sendAlertEmail error:", error);
   }
 };
+
 
 // =========================================================
 // Placeholder for future pattern detection
