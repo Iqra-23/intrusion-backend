@@ -1,7 +1,6 @@
 // utils/alertUtils.js
-
 import Alert from "../models/Alert.js";
-import { sendMail } from "../config/mailer.js";
+import { transporter } from "../config/mailer.js";
 import { getIO } from "./socket.js";
 
 // Suspicious keywords that trigger alerts
@@ -48,27 +47,39 @@ export const checkSuspiciousActivity = async (log, userEmail = null) => {
       return null;
     }
 
-    console.log("\n🔍 Checking suspicious activity for log:", log._id);
-    console.log("Level:", log.level);
-    console.log("Message:", log.message);
+    console.log(
+      "\n🔍 Checking suspicious activity for log ID:",
+      log._id?.toString()
+    );
+    console.log("   Level:", log.level);
+    console.log("   Message:", log.message);
 
     const message = (log.message || "").toLowerCase();
     const keywords = (log.keyword || []).map((k) => (k || "").toLowerCase());
 
+    console.log("   Keywords:", keywords);
+
+    // Find suspicious keywords
     const foundKeywords = SUSPICIOUS_KEYWORDS.filter((keyword) => {
-      return (
-        message.includes(keyword) ||
-        keywords.some((k) => k.includes(keyword))
+      const foundInMessage = message.includes(keyword);
+      const foundInKeywords = keywords.some(
+        (k) => k.includes(keyword) || keyword.includes(k)
       );
+      return foundInMessage || foundInKeywords;
     });
+
+    console.log("   Found suspicious keywords:", foundKeywords);
 
     // =========================================================
     // 🔥 If suspicious → create ALERT
     // =========================================================
     if (
       foundKeywords.length > 0 ||
-      ["warning", "error", "suspicious"].includes(log.level)
+      log.level === "suspicious" ||
+      log.level === "error" ||
+      log.level === "warning"
     ) {
+      // Determine severity
       let severity = "low";
 
       if (
@@ -79,34 +90,39 @@ export const checkSuspiciousActivity = async (log, userEmail = null) => {
       ) {
         severity = "critical";
       } else if (
-        log.level === "error" ||
         foundKeywords.some((k) =>
           ["sql injection", "xss", "malware", "virus", "hack"].includes(k)
-        )
+        ) ||
+        log.level === "error"
       ) {
         severity = "high";
       } else if (
-        log.level === "warning" ||
         foundKeywords.some((k) =>
-          ["unauthorized", "intrusion"].includes(k)
-        )
+          ["warning", "unauthorized", "intrusion"].includes(k)
+        ) ||
+        log.level === "warning"
       ) {
         severity = "medium";
       }
 
+      console.log("   Computed alert severity:", severity);
+
+      // Create alert in DB
       const alert = await Alert.create({
         logId: log._id,
         severity,
-        title: `Suspicious Activity Detected: ${log.level.toUpperCase()}`,
-        description: log.message,
+        title: `Suspicious Activity Detected: ${String(
+          log.level || ""
+        ).toUpperCase()}`,
+        description: log.message || "",
         keywords:
-          foundKeywords.length > 0 ? foundKeywords : [log.level],
+          foundKeywords.length > 0 ? foundKeywords : [log.level || "suspicious"],
       });
 
-      console.log("✅ Alert created:", alert._id);
+      console.log("✅ Alert created with ID:", alert._id.toString());
 
       // =========================================================
-      // 📡 Real-time socket alert
+      // 🔥 REAL-TIME ALERT EMIT — Safe Location (after initSocket)
       // =========================================================
       try {
         const io = getIO();
@@ -117,18 +133,25 @@ export const checkSuspiciousActivity = async (log, userEmail = null) => {
           description: alert.description,
           createdAt: alert.createdAt,
         });
-      } catch {
-        console.log("⚠️ Socket not ready, skipping emit");
+        console.log("📡 Real-time alert emitted");
+      } catch (emitErr) {
+        console.log("⚠️ Socket not ready yet, skipping real-time emit");
       }
 
       // =========================================================
-      // 📧 Email notification (GMAIL API)
+      // 📧 Send Email Notification
       // =========================================================
+      console.log(
+        "📧 Sending email notification to:",
+        userEmail || process.env.ADMIN_EMAIL || process.env.EMAIL_USER
+      );
+
       await sendAlertEmail(alert, log, userEmail);
 
       return alert;
     }
 
+    console.log("ℹ️ No alert created (no suspicious activity)");
     return null;
   } catch (error) {
     console.error("❌ checkSuspiciousActivity error:", error);
@@ -137,10 +160,15 @@ export const checkSuspiciousActivity = async (log, userEmail = null) => {
 };
 
 // =========================================================
-// 📧 SEND ALERT EMAIL (GMAIL API – NO SMTP)
+// 📧 SEND ALERT EMAIL
 // =========================================================
 const sendAlertEmail = async (alert, log, userEmail = null) => {
   try {
+    if (!transporter) {
+      console.error("❌ Transporter not initialized");
+      return;
+    }
+
     const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
     const toEmail = userEmail || adminEmail;
 
@@ -164,19 +192,22 @@ const sendAlertEmail = async (alert, log, userEmail = null) => {
             ? `<p><strong>Keywords:</strong> ${alert.keywords.join(", ")}</p>`
             : ""
         }
-        <a href="${process.env.FRONTEND_URL}/alerts">
+        <a href="${
+          process.env.FRONTEND_URL || "http://localhost:5173"
+        }/alerts">
           View Alert
         </a>
       </div>
     `;
 
-    await sendMail({
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
       to: toEmail,
       subject,
       html,
     });
 
-    console.log(`📧 Alert email sent to ${toEmail}`);
+    console.log(`📧 Email sent to ${toEmail}`);
   } catch (error) {
     console.error("❌ sendAlertEmail error:", error);
   }
