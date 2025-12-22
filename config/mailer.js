@@ -1,33 +1,24 @@
 // config/mailer.js
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, // Gmail App Password
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const sendMail = async ({ to, subject, html }) => {
+  if (!process.env.RESEND_API_KEY) {
+    console.error("❌ RESEND_API_KEY missing");
+    return;
+  }
+
   try {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.error("❌ EMAIL_USER or EMAIL_PASS missing");
-      return;
-    }
-
-    // Ensure 'to' is a simple email address
-    const recipient = to.includes('<') ? to.match(/<([^>]+)>/)[1] : to;
-
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: recipient,
+    await resend.emails.send({
+      from: "SEO Intrusion <onboarding@resend.dev>", // ✅ FIXED & SAFE
+      to,
       subject,
       html,
     });
 
-    console.log(`📧 Email sent to ${recipient}`);
+    console.log(`📧 Email sent to ${to}`);
   } catch (error) {
-    console.error(`❌ Email send failed to ${to}:`, error);
+    console.error("❌ Email send failed:", error);
   }
 };
