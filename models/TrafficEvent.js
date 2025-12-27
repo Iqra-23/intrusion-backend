@@ -15,48 +15,43 @@ const geoSchema = new mongoose.Schema(
 
 const trafficEventSchema = new mongoose.Schema(
   {
-    ip: String,
+    ip: { type: String, index: true },
     method: String,
-    path: String,
+    path: { type: String, index: true },
     status: Number,
     userAgent: String,
+    referrer: String,
 
-    // 🔹 FULL RAW HEADERS LOGGED (FEATURE: Logging of request headers + IP)
+    // ✅ NEW: which module generated this request (Dashboard, Logs, Auth...)
+    module: { type: String, index: true, default: "Other" },
+
+    // ✅ FULL RAW HEADERS LOGGED (FEATURE 1)
     headers: {
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
 
-    // 🔹 BASIC SESSION TRACKING (same sessionId for same user/session)
-    sessionId: {
-      type: String,
-      index: true,
-    },
+    // ✅ SESSION TRACKING (FEATURE 2)
+    sessionId: { type: String, index: true },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
     },
 
-    // 🔹 GEO LOCATION (FEATURE: Geo-location lookup)
+    // ✅ GEO LOCATION (FEATURE 3)
     geo: geoSchema,
 
-    // 🔹 SPIKE + TAGGING
+    // ✅ SPIKE DETECTION (FEATURE 5)
     isSpike: { type: Boolean, default: false },
     tags: [{ type: String }],
 
-    // 🔹 TRAFFIC ANOMALY DETECTION SCORE (0–100)
-    anomalyScore: {
-      type: Number,
-      default: 0,
-      min: 0,
-      max: 100,
-    },
-    anomalyReasons: [
-      {
-        type: String,
-      },
-    ],
+    // ✅ ANOMALY DETECTION (FEATURE 4)
+    anomalyScore: { type: Number, default: 0, min: 0, max: 100 },
+    anomalyReasons: [{ type: String }],
+
+    // ✅ useful for UI (response time)
+    durationMs: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
