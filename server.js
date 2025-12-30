@@ -2,83 +2,122 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
+import http from "http";
+import { Server } from "socket.io";
+
 import { connectDB } from "./config/db.js";
 
 import authRoutes from "./routes/authRoutes.js";
 import logRoutes from "./routes/logRoutes.js";
 import vulnerabilityRoutes from "./routes/vulnerabilityRoutes.js";
 import trafficRoutes from "./routes/trafficRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
 
 import { startLogArchiveCron, startLogCleanupCron } from "./utils/cronJobs.js";
 import { trafficLogger } from "./controllers/trafficController.js";
-
-import { Server } from "socket.io";
-import http from "http";
 import { initSocket } from "./utils/socket.js";
 
-import dashboardRoutes from "./routes/dashboardRoutes.js";
-
 dotenv.config();
+
 const app = express();
 
-// Connect to DB
+/* ===============================
+   🔗 DATABASE
+================================ */
 connectDB();
 
-// Middlewares
+/* ===============================
+   🌐 CORS — VERY IMPORTANT FIX
+================================ */
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://seo-intrusion-frontend.vercel.app",
+];
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://seo-intrusion-frontend.vercel.app"
+    origin: function (origin, callback) {
+      // allow server-to-server & Postman
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
     ],
-    methods: ["GET", "POST", "PATCH", "DELETE"],
+    exposedHeaders: ["Content-Disposition"],
     credentials: true,
   })
 );
 
+// 🔴 REQUIRED for DELETE / OPTIONS preflight
+app.options("*", cors());
 
-app.use(express.json());
+/* ===============================
+   🧠 MIDDLEWARES
+================================ */
+app.use(express.json({ limit: "10mb" }));
 app.use(morgan("dev"));
 
-// Traffic logger
+/* ===============================
+   🚦 TRAFFIC LOGGER (GLOBAL)
+================================ */
 app.use(trafficLogger);
 
-// Routes
+/* ===============================
+   🛣 ROUTES
+================================ */
 app.use("/api/auth", authRoutes);
 app.use("/api/logs", logRoutes);
 app.use("/api/vulnerabilities", vulnerabilityRoutes);
 app.use("/api/traffic", trafficRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
-// Cron jobs
+/* ===============================
+   ⏱ CRON JOBS
+================================ */
 startLogArchiveCron();
 startLogCleanupCron();
 
-// Server + socket.io
+/* ===============================
+   ⚡ SOCKET.IO
+================================ */
 const server = http.createServer(app);
+
 const io = new Server(server, {
   cors: {
-    origin: [
-      "https://seo-intrusion-frontend.vercel.app",
-      "http://localhost:5173"
-    ],
-    methods: ["GET", "POST", "PATCH", "DELETE"],
-    credentials: true
-  }
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    credentials: true,
+  },
 });
 
-
-// Register global socket instance
 initSocket(io);
 
-io.on("connection", () => {
-  console.log("⚡ Socket Connected");
+io.on("connection", (socket) => {
+  console.log("⚡ Socket connected:", socket.id);
 });
 
-// Start server
-server.listen(process.env.PORT, () => {
-  console.log(`🚀 Server running with Socket.io at port ${process.env.PORT}`);
+/* ===============================
+   🚀 START SERVER
+================================ */
+const PORT = process.env.PORT || 5000;
+
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
-app.get('/', (req, res) => {
-  res.send('<h1>Server is running successfully 🚀</h1>');
+
+/* ===============================
+   🧪 HEALTH CHECK
+================================ */
+app.get("/", (req, res) => {
+  res.send("<h1>SEO Intrusion Backend is running 🚀</h1>");
 });
