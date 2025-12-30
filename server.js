@@ -1,4 +1,3 @@
-// server.js
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -7,7 +6,6 @@ import http from "http";
 import { Server } from "socket.io";
 
 import { connectDB } from "./config/db.js";
-
 import authRoutes from "./routes/authRoutes.js";
 import logRoutes from "./routes/logRoutes.js";
 import vulnerabilityRoutes from "./routes/vulnerabilityRoutes.js";
@@ -19,74 +17,75 @@ import { trafficLogger } from "./controllers/trafficController.js";
 import { initSocket } from "./utils/socket.js";
 
 dotenv.config();
-
 const app = express();
 
-/* ===================== DATABASE ===================== */
+/* ================== DB ================== */
 connectDB();
 
-/* ===================== CORS ===================== */
+/* ================== MIDDLEWARE ================== */
 app.use(
   cors({
     origin: [
       "http://localhost:5173",
       "https://seo-intrusion-frontend.vercel.app",
     ],
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
 );
 
-/* ===================== MIDDLEWARE ===================== */
 app.use(express.json());
 app.use(morgan("dev"));
 
-/* ===================== ROUTES (AUTH FIRST) ===================== */
-// ❗ AUTH ROUTES FIRST — no traffic logger here
+/* ================== ROUTES ================== */
+// ❗ DO NOT log internal system APIs
 app.use("/api/auth", authRoutes);
-
-// ❗ OTHER MODULES
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/traffic", trafficRoutes);
 app.use("/api/logs", logRoutes);
 app.use("/api/vulnerabilities", vulnerabilityRoutes);
-app.use("/api/dashboard", dashboardRoutes);
 
-/* ===================== TRAFFIC LOGGER ===================== */
-// ✅ AFTER auth — so login / google login never breaks
-app.use(trafficLogger);
-app.use("/api/traffic", trafficRoutes);
+/* ================== TRAFFIC LOGGER (SAFE) ================== */
+// 🔥 ONLY log REAL USER TRAFFIC
+app.use((req, res, next) => {
+  if (
+    req.originalUrl.startsWith("/api/auth") ||
+    req.originalUrl.startsWith("/api/dashboard") ||
+    req.originalUrl.startsWith("/api/traffic") ||
+    req.originalUrl.startsWith("/api/logs") ||
+    req.originalUrl.startsWith("/api/vulnerabilities")
+  ) {
+    return next(); // ❌ don't log system APIs
+  }
+  trafficLogger(req, res, next);
+});
 
-/* ===================== CRON JOBS ===================== */
+/* ================== CRONS ================== */
 startLogArchiveCron();
 startLogCleanupCron();
 
-/* ===================== SERVER + SOCKET ===================== */
+/* ================== SERVER + SOCKET ================== */
 const server = http.createServer(app);
-
 const io = new Server(server, {
   cors: {
     origin: [
       "http://localhost:5173",
       "https://seo-intrusion-frontend.vercel.app",
     ],
-    methods: ["GET", "POST", "PATCH", "DELETE"],
     credentials: true,
   },
 });
 
 initSocket(io);
 
-io.on("connection", (socket) => {
-  console.log("⚡ Socket connected:", socket.id);
+io.on("connection", () => {
+  console.log("⚡ Socket Connected");
 });
 
-/* ===================== HEALTH CHECK ===================== */
+/* ================== START ================== */
+server.listen(process.env.PORT, () => {
+  console.log(`🚀 Server running on port ${process.env.PORT}`);
+});
+
 app.get("/", (req, res) => {
-  res.send("<h1>SEO Intrusion Backend is running 🚀</h1>");
-});
-
-/* ===================== START SERVER ===================== */
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  res.send("Server running 🚀");
 });
