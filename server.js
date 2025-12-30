@@ -18,17 +18,12 @@ import { trafficLogger } from "./controllers/trafficController.js";
 import { initSocket } from "./utils/socket.js";
 
 dotenv.config();
-
 const app = express();
 
-/* ===============================
-   🔗 DATABASE
-================================ */
+/* ================= DB ================= */
 connectDB();
 
-/* ===============================
-   🌐 CORS — VERY IMPORTANT FIX
-================================ */
+/* ================= CORS ================= */
 const allowedOrigins = [
   "http://localhost:5173",
   "https://seo-intrusion-frontend.vercel.app",
@@ -36,66 +31,47 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // allow server-to-server & Postman
+    origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-
       return callback(new Error("Not allowed by CORS"));
     },
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With",
-      "Accept",
-    ],
-    exposedHeaders: ["Content-Disposition"],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    exposedHeaders: ["Content-Disposition"],
   })
 );
 
-// 🔴 REQUIRED for DELETE / OPTIONS preflight
+// 🔴 VERY IMPORTANT
 app.options("*", cors());
 
-/* ===============================
-   🧠 MIDDLEWARES
-================================ */
-app.use(express.json({ limit: "10mb" }));
+/* ================= MIDDLEWARE ================= */
+app.use(express.json());
 app.use(morgan("dev"));
 
-/* ===============================
-   🚦 TRAFFIC LOGGER (GLOBAL)
-================================ */
+/* ================= TRAFFIC LOGGER ================= */
 app.use(trafficLogger);
 
-/* ===============================
-   🛣 ROUTES
-================================ */
+/* ================= ROUTES ================= */
 app.use("/api/auth", authRoutes);
 app.use("/api/logs", logRoutes);
 app.use("/api/vulnerabilities", vulnerabilityRoutes);
 app.use("/api/traffic", trafficRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
-/* ===============================
-   ⏱ CRON JOBS
-================================ */
+/* ================= CRON ================= */
 startLogArchiveCron();
 startLogCleanupCron();
 
-/* ===============================
-   ⚡ SOCKET.IO
-================================ */
+/* ================= SOCKET ================= */
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     credentials: true,
   },
 });
@@ -106,18 +82,12 @@ io.on("connection", (socket) => {
   console.log("⚡ Socket connected:", socket.id);
 });
 
-/* ===============================
-   🚀 START SERVER
-================================ */
+/* ================= START ================= */
 const PORT = process.env.PORT || 5000;
-
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Backend running on ${PORT}`);
 });
 
-/* ===============================
-   🧪 HEALTH CHECK
-================================ */
 app.get("/", (req, res) => {
-  res.send("<h1>SEO Intrusion Backend is running 🚀</h1>");
+  res.send("Backend running 🚀");
 });
