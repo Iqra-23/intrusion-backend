@@ -154,6 +154,10 @@ export const trafficLogger = async (req, res, next) => {
         userAgent,
       });
 
+      if (isSpike && !anomalyReasons.includes("High request rate (spike)")) {
+  anomalyReasons.push("High request rate (spike)");
+}
+
       await TrafficEvent.create({
         ip,
         method,
