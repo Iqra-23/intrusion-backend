@@ -117,7 +117,7 @@ export const trafficLogger = async (req, res, next) => {
     `${ip}-${String(userAgent).slice(0, 40)}`;
 
   // ✅ avoid logging traffic monitor APIs to prevent recursion noise
-  if (path.startsWith("/api/traffic")) return next();
+  // if (path.startsWith("/api/traffic")) return next();
 
   res.on("finish", async () => {
     try {
