@@ -8,7 +8,8 @@ import { generateTrafficReport } from "../utils/trafficReportGenerator.js";
 const ipCounter = new Map();
 
 // ✅ production wise: keep it in env later if needed
-const SPIKE_THRESHOLD = Number(process.env.SPIKE_THRESHOLD || 100);
+// const SPIKE_THRESHOLD = Number(process.env.SPIKE_THRESHOLD || 100);
+const SPIKE_THRESHOLD = 5;
 
 // suspicious patterns (very simple but effective for defense)
 const SUSPICIOUS_PATTERNS = [
