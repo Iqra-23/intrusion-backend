@@ -97,7 +97,6 @@ const computeAnomalyScore = ({ method, path, status, geo, isSpike, userAgent }) 
 };
 
 // ========== MIDDLEWARE: Traffic Logger ==========
-// ✅ Feature 1,2,3,4,5 all happen here
 export const trafficLogger = async (req, res, next) => {
   const start = Date.now();
 
@@ -323,7 +322,7 @@ export const getTrafficStats = async (req, res) => {
     ]);
     const avgAnomalyScore = avgAgg[0]?.avgScore || 0;
 
-    // ✅ bucket counts to show on UI (proof)
+    // ✅ bucket counts
     const anomalyBuckets = await TrafficEvent.aggregate([
       {
         $group: {
@@ -383,7 +382,7 @@ export const getTrafficAlerts = async (req, res) => {
   }
 };
 
-// GET /api/traffic/export (PDF)
+// GET /api/traffic/export (PDF)  ✅ overall report (existing)
 export const exportTrafficPdf = async (req, res) => {
   try {
     const { search = "", ip, country, method, path, status, minAnomaly, module } =
@@ -443,6 +442,41 @@ export const exportTrafficPdf = async (req, res) => {
       message: "Error generating traffic PDF report",
       error: e.message,
     });
+  }
+};
+
+// ✅✅ NEW: GET /api/traffic/export/:id (Single Request PDF)
+export const exportSingleTrafficPdf = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const event = await TrafficEvent.findById(id).lean();
+    if (!event) {
+      return res.status(404).json({ message: "Traffic event not found" });
+    }
+
+    const reportsDir = "./reports";
+    if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
+
+    const fileName = `traffic_event_${id}.pdf`;
+    const filePath = `${reportsDir}/${fileName}`;
+
+    // reuse same generator
+    await generateTrafficReport([event], { single: true, id }, filePath);
+
+    res.download(filePath, fileName, (err) => {
+      if (err) console.error("❌ Single Traffic PDF download error:", err);
+      setTimeout(() => {
+        try {
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        } catch (cleanupErr) {
+          console.error("Single Traffic PDF cleanup error:", cleanupErr);
+        }
+      }, 5000);
+    });
+  } catch (e) {
+    console.error("exportSingleTrafficPdf error:", e.message);
+    res.status(500).json({ message: "Error generating single traffic PDF report" });
   }
 };
 

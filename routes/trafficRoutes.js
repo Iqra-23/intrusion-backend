@@ -5,6 +5,7 @@ import {
   getTrafficStats,
   getTrafficAlerts,
   exportTrafficPdf,
+  exportSingleTrafficPdf,  // ✅ NEW
   deleteTrafficEvents,
   getTrafficEventById,
 } from "../controllers/trafficController.js";
@@ -17,7 +18,14 @@ router.use(trafficMiddleware);
 router.get("/", getTrafficEvents);
 router.get("/stats", getTrafficStats);
 router.get("/alerts", getTrafficAlerts);
+
+// overall export
 router.get("/export", exportTrafficPdf);
+
+// ✅ single export MUST be before /:id
+router.get("/export/:id", exportSingleTrafficPdf);
+
+// details
 router.get("/:id", getTrafficEventById);
 
 router.delete("/", deleteTrafficEvents);
