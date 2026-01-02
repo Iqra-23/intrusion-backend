@@ -1,4 +1,3 @@
-// models/Alert.js
 import mongoose from "mongoose";
 
 const alertSchema = new mongoose.Schema(
@@ -49,7 +48,7 @@ const alertSchema = new mongoose.Schema(
     },
   },
   {
-    timestamps: true, // createdAt + updatedAt
+    timestamps: true,
   }
 );
 

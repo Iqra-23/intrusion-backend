@@ -11,10 +11,14 @@ import logRoutes from "./routes/logRoutes.js";
 import vulnerabilityRoutes from "./routes/vulnerabilityRoutes.js";
 import trafficRoutes from "./routes/trafficRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
+import alertRoutes from "./routes/alertRoutes.js";
+
 
 import { startLogArchiveCron, startLogCleanupCron } from "./utils/cronJobs.js";
 import { trafficLogger } from "./controllers/trafficController.js";
 import { initSocket } from "./utils/socket.js";
+
+
 
 dotenv.config();
 const app = express();
@@ -43,6 +47,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/traffic", trafficRoutes);
 app.use("/api/logs", logRoutes);
 app.use("/api/vulnerabilities", vulnerabilityRoutes);
+app.use("/api/logs", alertRoutes);
 
 /* ================== TRAFFIC LOGGER (SAFE) ================== */
 // 🔥 ONLY log REAL USER TRAFFIC
