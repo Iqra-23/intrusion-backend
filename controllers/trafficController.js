@@ -107,8 +107,8 @@ export const trafficLogger = async (req, res, next) => {
   const path = req.originalUrl || req.url;
   const userAgent = req.headers["user-agent"] || "";
   const referrer = req.headers["referer"] || req.headers["referrer"] || "";
-  const userId = req.user?._id || seenUser?._id || null; // safe fallback if req.user present
-  const module = deriveModule(path);
+  const userId = req.user && req.user._id ? req.user._id : null;// safe fallback if req.user present
+  const module = deriveModule(path); 
 
   // pseudo session
   const sessionId =
