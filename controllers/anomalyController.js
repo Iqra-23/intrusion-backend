@@ -9,6 +9,18 @@ import {
   buildAnomalyReason,
 } from "../services/anomalyService.js";
 import { getIO } from "../utils/socket.js";
+import Log from "../models/Log.js";
+import { checkSuspiciousActivity } from "../utils/alertUtils.js";
+
+// ── Log helper ──
+const createLog = async (level, message, keyword = [], ipAddress = "System", userAgent = "System", metadata = {}) => {
+  try {
+    const log = await Log.create({ level, message, keyword, ipAddress, userAgent, metadata });
+    if (["warning", "error", "suspicious"].includes(level)) {
+      checkSuspiciousActivity(log, null).catch(() => {});
+    }
+  } catch (err) { console.error("createLog error:", err.message); }
+};
 
 const emitAnomalyAlert = (record) => {
   try {
@@ -90,6 +102,8 @@ export const updateBaseline = async (req, res) => {
       { new: true, upsert: true }
     );
 
+    await createLog("info", "Anomaly baseline profile updated", ["anomaly", "baseline"], "Admin", "System");
+
     res.json({
       success: true,
       message: "Baseline updated successfully",
@@ -160,6 +174,15 @@ export const analyzeAnomaly = async (req, res) => {
       createdRecords.push(record);
 
       if (record.emailAlertSent) emitAnomalyAlert(record);
+
+      // LOG: unusual login
+      await createLog(
+        score >= 70 ? "suspicious" : "warning",
+        `Unusual login from ${ip}: ${loginAttempts} attempts, ${failedLogins} failed (${loginDeviation}% above baseline)`,
+        ["anomaly", "unusual-login", "brute-force"],
+        ip, "Anomaly Detector",
+        { loginAttempts, failedLogins, deviation: loginDeviation, score }
+      );
     }
 
     const reqCurrent = Number(requestCount);
@@ -200,6 +223,15 @@ export const analyzeAnomaly = async (req, res) => {
       createdRecords.push(record);
 
       if (record.emailAlertSent) emitAnomalyAlert(record);
+
+      // LOG: high frequency
+      await createLog(
+        score >= 70 ? "suspicious" : "warning",
+        `High request frequency from ${ip}: ${reqCurrent}/min vs baseline ${reqBaseline}/min (${reqDeviation}% above)`,
+        ["anomaly", "high-frequency", "traffic-spike"],
+        ip, "Anomaly Detector",
+        { requestCount: reqCurrent, baseline: reqBaseline, deviation: reqDeviation, score }
+      );
     }
 
     const seoHits = detectSeoKeywordHits(payload);
@@ -241,6 +273,15 @@ export const analyzeAnomaly = async (req, res) => {
       createdRecords.push(record);
 
       if (record.emailAlertSent) emitAnomalyAlert(record);
+
+      // LOG: SEO spam
+      await createLog(
+        "suspicious",
+        `Negative SEO traffic from ${ip}: ${seoHits} spam keywords detected`,
+        ["anomaly", "seo-spam", "negative-seo"],
+        ip, "Anomaly Detector",
+        { seoHits, seoBaseline, deviation: seoDeviation, score }
+      );
     }
 
     if (createdRecords.length === 0) {

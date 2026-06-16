@@ -1,4 +1,4 @@
-// ================== ENV ==================
+// ================== ENV LOAD (IMPORTANT) ==================
 import "dotenv/config";
 
 // ================== CORE ==================
@@ -23,6 +23,7 @@ import dataEncryptionRoutes from "./routes/dataEncryptionRoutes.js";
 import anomalyRoutes from "./routes/anomalyRoutes.js";
 import incidentResponseRoutes from "./routes/incidentResponseRoutes.js";
 import incidentAnalysisRoutes from "./routes/incidentAnalysisRoutes.js";
+import profileRoutes from "./routes/profileRoutes.js"; // ✅ NEW
 
 import {
   startLogArchiveCron,
@@ -70,6 +71,16 @@ app.use(morgan("dev"));
 // ================== FIREWALL ==================
 app.use(firewallMiddleware);
 
+// ================== TRAFFIC LOGGER ==================
+const TRAFFIC_EXCLUDED = ["/api/traffic"];
+
+app.use((req, res, next) => {
+  const path = req.originalUrl || "";
+  const isExcluded = TRAFFIC_EXCLUDED.some((p) => path.startsWith(p));
+  if (isExcluded) return next();
+  return trafficLogger(req, res, next);
+});
+
 // ================== ROUTES ==================
 app.use("/api/auth", authRoutes);
 app.use("/api/dashboard", dashboardRoutes);
@@ -83,30 +94,7 @@ app.use("/api/data-encryption", dataEncryptionRoutes);
 app.use("/api/anomaly", anomalyRoutes);
 app.use("/api/incident-response", incidentResponseRoutes);
 app.use("/api/incident-analysis", incidentAnalysisRoutes);
-
-// ================== TRAFFIC LOGGER ==================
-app.use((req, res, next) => {
-  const excluded = [
-    "/api/auth",
-    "/api/dashboard",
-    "/api/traffic",
-    "/api/logs",
-    "/api/vulnerabilities",
-    "/api/alerts",
-    "/api/threats",
-    "/api/firewall",
-    "/api/data-encryption",
-    "/api/anomaly",
-    "/api/incident-response",
-    "/api/incident-analysis",
-  ];
-
-  if (excluded.some((path) => req.originalUrl.startsWith(path))) {
-    return next();
-  }
-
-  trafficLogger(req, res, next);
-});
+app.use("/api/profile", profileRoutes); // ✅ NEW
 
 // ================== ROOT ==================
 app.get("/", (req, res) => {
@@ -117,9 +105,12 @@ app.get("/", (req, res) => {
 startLogArchiveCron();
 startLogCleanupCron();
 
-// ================== SOCKET ==================
-io.on("connection", () => {
-  console.log("⚡ Socket Connected");
+// ================== SOCKET EVENTS ==================
+io.on("connection", (socket) => {
+  console.log("⚡ Socket Connected:", socket.id);
+  socket.on("disconnect", () => {
+    console.log("⚡ Socket Disconnected:", socket.id);
+  });
 });
 
 // ================== SERVER ==================

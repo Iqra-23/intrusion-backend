@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema({
   twoFactorEnabled: { type: Boolean, default: false },
   loginAttempts: { type: Number, default: 0 },
   lockUntil: { type: Date },
+  lastLogin: { type: Date, default: null }, // NEW: track last login time
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -19,23 +20,17 @@ userSchema.methods.isAccountLocked = function() {
 
 // Method to increment login attempts
 userSchema.methods.incLoginAttempts = async function() {
-  // If lock has expired, reset attempts
   if (this.lockUntil && this.lockUntil < Date.now()) {
     return this.updateOne({
       $set: { loginAttempts: 1 },
       $unset: { lockUntil: 1 }
     });
   }
-  
-  // Otherwise increment attempts
   const updates = { $inc: { loginAttempts: 1 } };
-  
-  // Lock account after 3 failed attempts for 15 minutes
   const newAttempts = this.loginAttempts + 1;
   if (newAttempts >= 3) {
-    updates.$set = { lockUntil: Date.now() + 15 * 60 * 1000 }; // 15 minutes
+    updates.$set = { lockUntil: Date.now() + 15 * 60 * 1000 };
   }
-  
   return this.updateOne(updates);
 };
 

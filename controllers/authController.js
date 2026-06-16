@@ -108,7 +108,6 @@ export const signup = async (req, res) => {
       { userEmail: email }
     );
 
-    // ✅ IMPORTANT FIX: await + error visible
     await sendMail({
       to: email,
       subject: "Verify Your Email - SEO Intrusion Detector",
@@ -116,6 +115,7 @@ export const signup = async (req, res) => {
         <div>
           <h2>Welcome, ${name}</h2>
           <p>Your verification code is <b>${code}</b></p>
+          <p>This code expires in 5 minutes.</p>
         </div>
       `,
     });
@@ -169,18 +169,66 @@ export const login = async (req, res) => {
     const client = getClientInfo(req);
 
     const user = await User.findOne({ email });
-    if (!user)
+    if (!user) {
       return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    // FIX: Account lockout check properly wired
+    if (user.isAccountLocked && user.isAccountLocked()) {
+      await createLog(
+        "warning",
+        `Login attempt on locked account: ${email}`,
+        ["authentication", "login", "locked"],
+        client.ipAddress,
+        client.userAgent,
+        { userEmail: email }
+      );
+      return res.status(403).json({
+        message: "Account is temporarily locked. Please try again later or reset your password.",
+        locked: true,
+      });
+    }
 
     const match = await bcrypt.compare(password, user.password);
-    if (!match)
-      return res.status(401).json({ message: "Invalid email or password" });
+    if (!match) {
+      // FIX: Increment login attempts on failed login
+      if (user.incLoginAttempts) {
+        await user.incLoginAttempts();
+      }
+
+      const attemptsRemaining = user.loginAttempts !== undefined
+        ? Math.max(0, 3 - (user.loginAttempts + 1))
+        : null;
+
+      await createLog(
+        "warning",
+        `Failed login attempt for ${email}`,
+        ["authentication", "login", "failed"],
+        client.ipAddress,
+        client.userAgent,
+        { userEmail: email }
+      );
+
+      return res.status(401).json({
+        message: "Invalid email or password",
+        attemptsRemaining,
+        suggestReset: attemptsRemaining !== null && attemptsRemaining <= 1,
+      });
+    }
+
+    // Reset login attempts on successful login
+    if (user.resetLoginAttempts) {
+      await user.resetLoginAttempts();
+
+     
+    }
+          await User.updateOne({ _id: user._id }, { lastLogin: new Date() });
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     await OTP.deleteMany({ email });
     await OTP.create({ email, code });
 
-    // RESPONSE FIRST (as you had)
+    // Send OTP email (non-blocking — response goes first)
     res.json({
       token: generateToken(user),
       user: { id: user._id, name: user.name, email: user.email },
@@ -196,14 +244,16 @@ export const login = async (req, res) => {
       { userEmail: email }
     );
 
-    // ✅ IMPORTANT FIX
     await sendMail({
       to: email,
       subject: "Login OTP - SEO Intrusion Detector",
-      html: `<h2>Your OTP is ${code}</h2>`,
+      html: `<h2>Your OTP is <b>${code}</b></h2><p>This code expires in 5 minutes.</p>`,
     });
   } catch (err) {
     console.error("Login error:", err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Server error during login" });
+    }
   }
 };
 
@@ -213,8 +263,9 @@ export const verifyLoginOtp = async (req, res) => {
     const { email, code } = req.body;
 
     const otp = await OTP.findOne({ email, code });
-    if (!otp)
+    if (!otp) {
       return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
 
     await OTP.deleteOne({ email, code });
     res.json({ message: "OTP verified successfully" });
@@ -230,8 +281,9 @@ export const forgotPassword = async (req, res) => {
     const { email } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user)
+    if (!user) {
       return res.status(404).json({ message: "User not found" });
+    }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     await OTP.deleteMany({ email });
@@ -239,8 +291,8 @@ export const forgotPassword = async (req, res) => {
 
     await sendMail({
       to: email,
-      subject: "Password Reset OTP",
-      html: `<h2>Your OTP is ${code}</h2>`,
+      subject: "Password Reset OTP - SEO Intrusion Detector",
+      html: `<h2>Your OTP is <b>${code}</b></h2><p>This code expires in 5 minutes.</p>`,
     });
 
     res.json({ message: "OTP sent successfully" });
@@ -256,8 +308,9 @@ export const resetPassword = async (req, res) => {
     const { email, code, newPassword } = req.body;
 
     const otp = await OTP.findOne({ email, code });
-    if (!otp)
+    if (!otp) {
       return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
 
     const hashed = await bcrypt.hash(newPassword, 10);
     await User.updateOne({ email }, { password: hashed });
@@ -298,12 +351,14 @@ export const googleLogin = async (req, res) => {
 
     await sendMail({
       to: email,
-      subject: "Google Login OTP",
-      html: `<h2>Your OTP is ${code}</h2>`,
+      subject: "Google Login OTP - SEO Intrusion Detector",
+      html: `<h2>Your OTP is <b>${code}</b></h2><p>This code expires in 5 minutes.</p>`,
     });
   } catch (err) {
     console.error("Google login error:", err.message);
-    res.status(500).json({ message: "Google login failed" });
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Google login failed" });
+    }
   }
 };
 
@@ -313,17 +368,29 @@ export const resendVerification = async (req, res) => {
     const { email } = req.body;
     const client = getClientInfo(req);
 
-    if (!validator.isEmail(email))
+    if (!validator.isEmail(email)) {
       return res.status(400).json({ message: "Invalid email format" });
+    }
 
     const existingOTP = await OTP.findOne({ email });
-    if (!existingOTP)
+    if (!existingOTP) {
       return res.status(404).json({
         message: "No pending verification found for this email",
       });
+    }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    await OTP.findOneAndUpdate({ email }, { code, createdAt: Date.now() });
+
+    // FIX: delete + recreate instead of findOneAndUpdate
+    // findOneAndUpdate cannot reset MongoDB TTL index — the TTL clock
+    // is set at document insert time and cannot be changed after that.
+    // Deleting and recreating resets the TTL properly.
+    await OTP.deleteOne({ email });
+    await OTP.create({
+      email,
+      code,
+      userData: existingOTP.userData, // preserve signup data
+    });
 
     await createLog(
       "info",
@@ -337,7 +404,7 @@ export const resendVerification = async (req, res) => {
     await sendMail({
       to: email,
       subject: "New Verification Code - SEO Intrusion Detector",
-      html: `<h2>Your new verification code is ${code}</h2>`,
+      html: `<h2>Your new verification code is <b>${code}</b></h2><p>This code expires in 5 minutes.</p>`,
     });
 
     res.json({ message: "Verification code resent successfully" });
@@ -345,4 +412,4 @@ export const resendVerification = async (req, res) => {
     console.error("Resend verification error:", err.message);
     res.status(500).json({ message: "Failed to resend verification code" });
   }
-};
+};  

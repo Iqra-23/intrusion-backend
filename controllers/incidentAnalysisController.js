@@ -244,7 +244,8 @@ export const exportReportExcel = async (req, res) => {
 };
 
 // ── DELETE REPORT ────────────────────────────────────────
-export const deleteReport = async (req, res) => {W 
+// FIX: stray "W" character removed from function signature
+export const deleteReport = async (req, res) => {
   try {
     const report = await IncidentReport.findByIdAndDelete(req.params.id);
     if (!report) return res.status(404).json({ success: false, message: "Report not found" });
@@ -260,4 +261,4 @@ export const deleteReport = async (req, res) => {W
     console.error(error);
     res.status(500).json({ success: false, message: "Failed to delete report" });
   }
-};
+}; 
